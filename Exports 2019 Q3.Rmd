@@ -1,7 +1,24 @@
+---
+title: "Exports 2019 Q3"
+author: "Planning and Regional Development"
+date: "11/19/2019"
+output:
+  word_document: default
+  pdf_document: default
+---
 
+```{r setup, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include=FALSE)
+```
+
+\pagenumbering{arabic} 
+
+
+#Three export models. 
+```{r}
 rm(list = ls()) # clear global environment 
 cat("\014") # clear the console 
-
+options(warn=-1) # suppress annoying warnings 
 
 library(olsrr) 
 library(data.table) 
@@ -16,13 +33,12 @@ library(DataCombine)
 library(glmnet) 
 library(Hmisc) 
 
-
 setwd("~/Dropbox/Work and research/Port Authority/Port Exports 2019/port_exports")
+```
 
-####################################################################################
-# TRADITIONAL MODEL TRADITIONAL MODEL TRADITIONAL MODEL TRADITIONAL MODEL 
-####################################################################################
+#1. Traditional model
 
+```{r}
 exports = read.csv("./Loaded_exports19Q3.csv") 
 exports$quarter = seq(as.Date("1997/1/1"), as.Date("2019/07/01"), by="quarter") # Add date
 
@@ -51,47 +67,58 @@ summary(fit)
 
 export_predict = predict(fit, n.ahead=74, newxreg=forc_reg, level=95)#interval = "prediction", conf.level=.9) # predict 
 export_predict$quarter = seq(as.Date("2019-07-01"),as.Date("2037-10-01"),by="quarter")  
+```
 
-# Tests 
+```{r, include=TRUE}
+summary(fit) 
+```
+
+###Tests 
+```{r}
 resids = as.vector(resid(fit)) 
-durbinWatsonTest(resids) # Autocorrelation 
+dw1 = durbinWatsonTest(resids) # Autocorrelation 
 toy.fit = as.data.frame(cbind(hist$Actual,fitted(fit))); names(toy.fit) = c("actual","fitted")
-mape.fit = mean(abs(toy.fit$actual-toy.fit$fitted/toy.fit$actual) * 100) # MAPE # rowMeans
+mape.fit1 = mean(abs(toy.fit$actual-toy.fit$fitted/toy.fit$actual) * 100) # MAPE # rowMeans
 rm(toy.fit) 
-export_predict 
-#write.csv(export_predict,"./Forecast from arima model_pess 20190903.csv") 
-#write.csv(resids, "./Residuals from arima model 20190709.csv") 
-#write.csv(summary(fit),"./Equation from arima_base 20190903.csv") 
+write.csv(export_predict,"./Export_forecast1.csv") 
+write.csv(resids, "./Residuals_forecast1.csv") 
+write.csv(summary(fit),"./Equation_forecast1.csv") 
+```
 
 
+#2. Autoregressive Model
 
-####################################################################################
-# AUTOREGRESSIVE MODEL AUTOREGRESSIVE MODEL AUTOREGRESSIVE MODEL 
-####################################################################################
-
+```{r}
 fit_alt = arima(ts(hist$Actual), xreg = hist_reg, order=c(0,0,0), include.mean=T) # as of 2018-09 (1,0,1) before that (1,1,2)) 
 
 summary(fit_alt) 
 
 export_predict.alt = predict(fit_alt, n.ahead=74, newxreg=forc_reg, level=95) #interval = "prediction", conf.level=.9) # predict 
 export_predict.alt$quarter = seq(as.Date("2019-07-01"),as.Date("2037-10-01"),by="quarter")  
+```
 
-# Tests 
+```{r, include=TRUE}
+summary(fit_alt) 
+```
+
+###Tests 
+
+```{r}
 resids_alt = as.vector(resid(fit_alt)) 
 durbinWatsonTest(resids_alt)
 toy.fit_alt = as.data.frame(cbind(hist$Actual,fitted(fit_alt))); names(toy.fit_alt) = c("actual","fitted")
 mape_alt = mean(abs(toy.fit_alt$actual-toy.fit_alt$fitted/toy.fit_alt$actual) * 100) # MAPE # rowMeans
 rm(toy.fit_alt) 
 export_predict.alt
-#write.csv(export_predict,"./Forecast from old model 20190903.csv") 
-#write.csv(resids_alt, "./Residuals from old model 20190709.csv") 
-#write.csv(summary(fit_alt),"./Equation from old 20190709.csv") 
+write.csv(export_predict,"./Export_forecast2.csv") 
+write.csv(resids_alt, "./Residuals_forecast2.csv") 
+write.csv(summary(fit_alt),"./Equation_forecast2.csv") 
+```
 
 
-####################################################################################
-# VARIABLE SELECTION VARIABLE SELECTION 
-####################################################################################
+#3. Variable Selection
 
+```{r}
 # IHS Forecasts: "Other Aggregates", Quarterly 
 #other = read.csv("./IHS_otheragg2019Q3.csv") 
 other = read.csv("./IHS_otheragg2019Q3.csv", na.strings = c("#N/A", "bar"))
@@ -121,7 +148,6 @@ actual = hist.mega[,2] # Distinguish second column, the Y variable
 #hist.mega.matrix = hist.mega[,-1:2] # Lose the first and second column in main matrix 
 hist.mega.matrix = hist.mega[,-1] # Lose the first and second column in main matrix 
 hist.mega.matrix = hist.mega.matrix[,-1] 
-
 hist.mega.matrix = data.matrix(hist.mega.matrix) 
 
 # Elastic Net 
@@ -143,7 +169,6 @@ myResults = data.frame(
   features = myCoefs@Dimnames[[1]][ which(myCoefs != 0 ) ], #intercept included
   coefs    = myCoefs              [ which(myCoefs != 0 ) ]  #intercept included
 )
-
 myResults 
 
 exports.mini = exports.mega[myResults$features] 
@@ -151,12 +176,8 @@ exports.mini$Q2 = NULL
 exports.mini$Q3 = NULL 
 exports.mini$Q4 = NULL 
 exports.dummies = exports_old[c("quarter","Q2", "Q3", "Q4")] 
-#head(exports_old[-1,1:2]) 
 #exports.mini = cbind(exports.dummies[-1,1:2],exports.mini) #exports_old$Actual[-1,])#,exports_old.mega)
-head(exports.dummies) 
-head(exports.mini) 
 
-#
 exports.mini = merge(exports.mini,exports.dummies, by="quarter")  
 
 # Fit ARIMA terms 
@@ -177,23 +198,34 @@ fit.net = auto.arima(ts(before$Actual),xreg=oldreg, ic="aic", trace=TRUE, allowd
 
 predict.net = predict(fit.net, n.ahead=nrow(after), newxreg=newreg, level=95)#interval = "prediction", conf.level=.9) # predict 
 predict.net$quarter = seq(as.Date("2019-07-01"),as.Date("2037-10-01"),by="quarter") #+extra 
+```
 
-# Tests 
+
+```{r, include=TRUE}
+summary(fit.net) 
+```
+
+
+###Tests 
+```{r, include=TRUE}
 resids.net = as.vector(resid(fit.net)) 
-durbinWatsonTest(resids.net)
-toy.fit.net = as.data.frame(cbind(actual,fitted(fit.net))); names(toy.fit.net) = c("actual","fitted")
-mape.net = mean(abs(toy.fit.net$actual-toy.fit.net$fitted/toy.fit.net$actual) * 100) # MAPE # rowMeans
-rm(toy.fit.net) 
-predict.net
-#write.csv(export_predict,"./Forecast from old model 20190903.csv") 
-#write.csv(resids_alt, "./Residuals from old model 20190709.csv") 
-#write.csv(summary(fit_alt),"./Equation from old 20190709.csv") 
+dw3 = durbinWatsonTest(resids.net) 
+```
 
 
-######################################################################
-### LOOK AROUND LOOK AROUND LOOK AROUND LOOK AROUND LOOK AROUND 
-######################################################################
+```{r}
+#toy.fit.net = as.data.frame(cbind(actual,fitted(fit.net))); #names(toy.fit.net) = c("actual","fitted")
+#mape.net = mean(abs(toy.fit.net$actual-toy.fit.net$fitted/toy.fit.net$actual) * 100) # MAPE # rowMeans
+#rm(toy.fit.net) 
+#predict.net 
+write.csv(predict.net$pred,"./Export_forecast3.csv") 
+write.csv(resids.net, "./Residuals_forecast3.csv") 
+write.csv(summary(fit.net),"./Equation_forecast3.csv") 
+```
 
+
+#Comparison
+```{r}
 #export_predict = as.data.frame(export_predict) 
 #export_predict.alt = as.data.frame(export_predict.alt) 
 #predict.net = as.data.frame(predict.net) 
@@ -205,13 +237,15 @@ predict.net
 #  xlab('Quarter') +
 #  ylab('TEUs')
 
+```
 
-
-# 
+```{r}
 # Diagnostics 
-out1 = tidy(fit) 
-# out2 = tidy(glance(fit)) ## why is this crashing my program? 
-out2 = glance(fit) 
-# Et cetera 
-accuracy(fit) 
-accuracy(fit)[,'MAPE'] 
+#out1 = tidy(fit) 
+## out2 = tidy(glance(fit)) ## why is this crashing my program? 
+#out2 = glance(fit) 
+## Et cetera 
+#accuracy(fit) 
+#accuracy(fit)[,'MAPE'] 
+```
+
